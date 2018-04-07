@@ -16,7 +16,7 @@ import type { BabelNodeStatement, BabelNodeExpression, BabelNodeIdentifier } fro
 import { NameGenerator } from "../utils/generator.js";
 import invariant from "../invariant.js";
 import type { ResidualFunctionBinding, ScopeBinding, FunctionInstance } from "./types.js";
-import { SerializerStatistics, type ReferentializationScope } from "./types.js";
+import { AreSameInitializationValues, SerializerStatistics, type ReferentializationScope } from "./types.js";
 import { getOrDefault } from "./utils.js";
 import { Realm } from "../realm.js";
 
@@ -89,14 +89,35 @@ export class Referentializer {
     // One switch case for one scope.
     const cases = [];
     const serializedScopes = this._getReferentializationState(referentializationScope).serializedScopes;
+    type InitializationCase = {|
+      scopeIDs: Array<number>,
+      values: Array<BabelNodeExpression>,
+    |};
+    const initializationCases: Array<InitializationCase> = [];
     for (const scopeBinding of serializedScopes.values()) {
-      const scopeObjectExpression = t.arrayExpression((scopeBinding.initializationValues: any));
-      cases.push(
-        t.switchCase(t.numericLiteral(scopeBinding.id), [
-          t.expressionStatement(t.assignmentExpression("=", captured, scopeObjectExpression)),
-          t.breakStatement(),
-        ])
-      );
+      const i = initializationCases.findIndex(ic => {
+        return AreSameInitializationValues(ic.values, scopeBinding.initializationValues);
+      });
+      if (i === -1) {
+        initializationCases.push({
+          scopeIDs: [scopeBinding.id],
+          values: scopeBinding.initializationValues,
+        });
+      } else {
+        initializationCases[i].scopeIDs.push(scopeBinding.id);
+      }
+    }
+    for (const ic of initializationCases) {
+      ic.scopeIDs.forEach((id, i) => {
+        let consequent: Array<BabelNodeStatement> = [];
+        if (i === ic.scopeIDs.length - 1) {
+          consequent = [
+            t.expressionStatement(t.assignmentExpression("=", captured, t.arrayExpression((ic.values: any)))),
+            t.breakStatement(),
+          ];
+        }
+        cases.push(t.switchCase(t.numericLiteral(id), consequent));
+      });
     }
     // Default case.
     cases.push(

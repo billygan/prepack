@@ -13,6 +13,7 @@ import { DeclarativeEnvironmentRecord, type Binding } from "../environment.js";
 import { ConcreteValue, Value, ObjectValue, AbstractValue } from "../values/index.js";
 import type { ECMAScriptSourceFunctionValue, FunctionValue } from "../values/index.js";
 import type { BabelNodeExpression, BabelNodeStatement } from "babel-types";
+import { shallowEqual } from "babel-types";
 import { SameValue } from "../methods/abstract.js";
 import { Realm, type Effects } from "../realm.js";
 import invariant from "../invariant.js";
@@ -126,6 +127,14 @@ export type ScopeBinding = {
   capturedScope?: string,
   referentializationScope: ReferentializationScope,
 };
+
+export function AreSameInitializationValues(x: Array<BabelNodeExpression>, y: Array<BabelNodeExpression>) {
+  if (x.length !== y.length) return false;
+  for (let i = 0; i < x.length; i++) {
+    if (!shallowEqual(x[i], y[i])) return false;
+  }
+  return true;
+}
 
 export function AreSameResidualBinding(realm: Realm, x: ResidualFunctionBinding, y: ResidualFunctionBinding) {
   if (x.serializedValue === y.serializedValue) return true;
